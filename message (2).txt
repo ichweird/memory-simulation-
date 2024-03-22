@@ -1,0 +1,523 @@
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <time.h>
+#include <limits.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+// Structure de partition
+typedef struct PartitionNode {
+    int adresse;
+    int taille;
+    int etat; // 1 pour libre, 0 pour occupée
+    struct PartitionNode* suivant;
+} PartitionNode;
+
+// Structure de processus
+typedef struct Processus {
+    int id;
+    float arrivee;
+    float duree;
+    int taille;
+    struct Processus* suivant;
+} Processus;
+
+// Structure de nœud pour la file de processus
+typedef struct Node {
+    Processus processus;
+    struct Node* suivant;
+} Node;
+
+// File de processus
+typedef struct FileProcessus {
+    Node* tete;
+    Node* queue;
+} FileProcessus;
+
+// Initialisation de la file de processus
+void InitFile(FileProcessus* file) {
+    file->tete = NULL;
+    file->queue = NULL;
+}
+
+// Vérifier si la file de processus est vide
+int FileVide(FileProcessus file) {
+    return (file.tete == NULL);
+}
+
+// Enfiler un processus à la queue de la file
+void Enfiler(FileProcessus* file, Processus p) {
+    Node* nouveauNode = (Node*)malloc(sizeof(Node));
+    if (nouveauNode == NULL) {
+        exit(EXIT_FAILURE);
+    }
+
+    nouveauNode->processus = p;
+    nouveauNode->suivant = NULL;
+
+    if (FileVide(*file)) {
+        file->tete = nouveauNode;
+        file->queue = nouveauNode;
+    } else {
+        file->queue->suivant = nouveauNode;
+        file->queue = nouveauNode;
+    }
+}
+
+// Défiler un processus de la tête de la file
+void Defiler(FileProcessus* file) {
+    if (FileVide(*file)) {
+        return;
+    }
+
+    Node* temp = file->tete;
+    file->tete = file->tete->suivant;
+
+    free(temp);
+}
+
+// Obtenir le processus en tête de la file
+Processus TeteFile(FileProcessus file) {
+    if (FileVide(file)) {
+
+    return file.tete->processus;
+}
+}
+#ifdef _WIN32
+// Fonctions pour la gestion des couleurs sur Windows
+void SetColor(int text, int background) {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), text | (background << 4));
+}
+
+void ResetColor() {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
+}
+#endif
+
+// Afficher les processus dans la file
+void AfficherFile(FileProcessus file) {
+    if (FileVide(file)) {
+        printf("La file est vide.\n");
+        return;
+    }
+
+    printf("\nFile de processus :\n");
+    printf("| Arrivee  | Duree  | Taille | ID |\n");
+    printf("|----------|--------|--------|----|\n");
+
+    Node* current = file.tete;
+    while (current != NULL) {
+        Processus currentProcessus = current->processus;
+
+
+        printf("| %-8.2f | %-6.2f | %-6d | %-2d |\n", currentProcessus.arrivee, currentProcessus.duree, currentProcessus.taille, currentProcessus.id);
+        current = current->suivant;
+    }
+
+    printf("|__________|________|________|____|\n");
+}
+
+
+PartitionNode* CreerPartitionsAleatoires() {
+    PartitionNode* partitions = NULL;
+    PartitionNode* lastPartition = NULL;
+
+    int numPartitions = rand() % 5 + 1;
+    for (int i = 0; i < numPartitions; i++) {
+        PartitionNode* nouvellePartition = (PartitionNode*)malloc(sizeof(PartitionNode));
+        if (nouvellePartition == NULL) {
+            exit(EXIT_FAILURE);
+        }
+
+        nouvellePartition->adresse = rand() % 1000;
+        nouvellePartition->taille = rand() % 1000 + 100;
+        nouvellePartition->etat = rand() % 2;
+        nouvellePartition->suivant = NULL;
+
+        PartitionNode* prev = NULL;
+        PartitionNode* current = partitions;
+
+        while (current != NULL && current->adresse < nouvellePartition->adresse) {
+            prev = current;
+            current = current->suivant;
+        }
+
+        if (prev == NULL) {
+            nouvellePartition->suivant = partitions;
+            partitions = nouvellePartition;
+        } else {
+            prev->suivant = nouvellePartition;
+            nouvellePartition->suivant = current;
+        }
+
+        lastPartition = nouvellePartition;
+    }
+
+    return partitions;
+}
+void  Init(FileProcessus* file) {
+    InitFile(file);
+
+    srand((unsigned int)time(NULL));
+
+
+
+    int numProcessus = rand() % 5 + 2;
+
+    for (int i = 0; i < numProcessus; i++) {
+        Processus processus = {i + 1, (rand() % 10), (rand() % 10), rand() % 1000, NULL};
+        Enfiler(file, processus);
+    }
+
+}
+void LibererMemoire(PartitionNode* partitions) {
+    while (partitions != NULL) {
+        PartitionNode* temp = partitions;
+        partitions = partitions->suivant;
+        free(temp);
+    }
+}
+void ReorganiserMemoire(PartitionNode* partitions) {
+    PartitionNode* current = partitions;
+    while (current != NULL && current->suivant != NULL) {
+        if (current->etat == 1 && current->suivant->etat == 1) {
+            // Fusionner les partitions libres adjacentes
+            current->taille += current->suivant->taille;
+            PartitionNode* temp = current->suivant;
+            current->suivant = current->suivant->suivant;
+            free(temp);
+        } else {
+            current = current->suivant;
+        }
+    }
+}
+void firstfit(PartitionNode* partitions, FileProcessus *file) {
+    if (FileVide(*file)) {
+        printf("La file est vide. Aucun processus à charger en mémoire.\n");
+        return;
+    }
+
+    Processus processus = TeteFile(*file);
+    PartitionNode* p = partitions;
+    int processusConvient = 0;
+
+    while (p != NULL && (p->etat != 1 || p->taille < processus.taille)) {
+        p = p->suivant;
+    }
+
+    if (p != NULL) {
+        // La partition est trouvée, le processus peut être chargé
+
+            processusConvient = 1;
+
+            // Créez une nouvelle partition libre (résidu) si nécessaire
+            if (p->taille > processus.taille) {
+                PartitionNode* residu = (PartitionNode*)malloc(sizeof(PartitionNode));
+                residu->adresse = p->adresse + processus.taille;
+                residu->taille = p->taille - processus.taille;
+                residu->etat = 1; // libre
+                residu->suivant = p->suivant;
+                p->suivant = residu;
+            }
+
+            // Mettez à jour l'état de la partition pour indiquer qu'elle est occupée
+            p->etat = 0;
+
+            // Retirez le processus de la file
+            Defiler(file);
+
+
+    }
+    if (!processusConvient) {
+        // Si aucun emplacement convenable n'est trouvé, mettez le processus en queue
+        printf("Aucune partition libre pour le processus de taille %d. Mise en queue.\n", processus.taille);
+        Enfiler(file, TeteFile(*file));  // Mise en queue du processus
+        Defiler(file);  // Retirez le processus de la tête de la file
+
+
+    }
+
+    // Réorganisez la mémoire après la fin d'un processus (s'il a été chargé)
+    if (processusConvient) {
+        ReorganiserMemoire(partitions);
+
+    }
+}
+void bestfit(PartitionNode* partitions, FileProcessus* file) {
+    if (FileVide(*file)) {
+        printf("La file est vide. Aucun processus à charger en mémoire.\n");
+        return;
+    }
+
+    Processus processus = TeteFile(*file);
+    PartitionNode* p = partitions;
+    PartitionNode* meilleurePartition = NULL;
+    int meilleureDifference = INT_MAX;
+
+    while (p != NULL) {
+        if (p->etat == 1 && p->taille >= processus.taille) {
+            int difference = p->taille - processus.taille;
+            if (difference < meilleureDifference) {
+                meilleureDifference = difference;
+                meilleurePartition = p;
+            }
+        }
+        p = p->suivant;
+    }
+
+    if (meilleurePartition != NULL) {
+        // Créez une nouvelle partition libre (résidu) si nécessaire
+        if (meilleurePartition->taille > processus.taille) {
+            PartitionNode* residu = (PartitionNode*)malloc(sizeof(PartitionNode));
+            residu->adresse = meilleurePartition->adresse + processus.taille;
+            residu->taille = meilleurePartition->taille - processus.taille;
+            residu->etat = 1; // libre
+            residu->suivant = meilleurePartition->suivant;
+            meilleurePartition->taille = meilleurePartition->taille;
+            meilleurePartition->suivant = residu;
+        }
+        // Mettez à jour l'état de la partition pour indiquer qu'elle est occupée
+        meilleurePartition->etat = 0;
+        // Retirez le processus de la file
+        Defiler(file);
+        printf("Processus de taille %d alloue a la partition de taille %d (residu : %d)\n",
+               processus.taille, meilleurePartition->taille,
+               meilleurePartition->taille - processus.taille);
+               ReorganiserMemoire(partitions);
+    } else {
+        printf("Aucune partition libre pour le processus de taille %d\n", processus.taille);
+    }
+}
+void worstfit(PartitionNode* partitions, FileProcessus* file) {
+    if (FileVide(*file)) {
+        printf("La file est vide. Aucun processus à charger en mémoire.\n");
+        return;
+    }
+
+    Processus processus = TeteFile(*file);
+    PartitionNode* p = partitions;
+    PartitionNode* pMaxResidu = NULL;
+    int maxResidu = -1;
+
+    while (p != NULL) {
+        if (p->etat == 1 && p->taille >= processus.taille) {
+            int residu = p->taille - processus.taille;
+            if (residu > maxResidu) {
+                maxResidu = residu;
+                pMaxResidu = p;
+            }
+        }
+        p = p->suivant;
+    }
+
+    if (pMaxResidu != NULL) {
+        // Créez une nouvelle partition libre (résidu) si nécessaire
+        if (pMaxResidu->taille > processus.taille) {
+            PartitionNode* residu = (PartitionNode*)malloc(sizeof(PartitionNode));
+            residu->adresse = pMaxResidu->adresse + processus.taille;
+            residu->taille = pMaxResidu->taille - processus.taille;
+            residu->etat = 1; // libre
+            residu->suivant = pMaxResidu->suivant;
+            pMaxResidu->taille = pMaxResidu->taille ;
+            pMaxResidu->suivant = residu;
+        }
+
+        // Mettez à jour l'état de la partition pour indiquer qu'elle est occupée
+        pMaxResidu->etat = 0;
+
+        // Retirez le processus de la file
+        Defiler(file);
+
+        ReorganiserMemoire(partitions);
+
+        printf("Processus de taille %d alloué à la partition de taille %d (résidu : %d)\n",
+               processus.taille, pMaxResidu->taille,
+               pMaxResidu->taille - processus.taille);
+    } else {
+        printf("Aucune partition libre pour le processus de taille %d\n", processus.taille);
+    }
+}
+// Fonction pour afficher le tableau des partitions sans couleurs
+void AfficherPartitionsSansCouleurs(PartitionNode* partitions) {
+    printf("\nLa liste des partitions en mémoire :\n");
+    printf("| Adresse  | Taille  | Etat    |\n");
+    printf("|----------|---------|---------|\n");
+
+    PartitionNode* current = partitions;
+    while (current != NULL) {
+        const char* etat_str = (current->etat == 1) ? "libre" : "occupée";
+
+        printf("| %-8d ", current->adresse);
+        printf("| %-7d ", current->taille);
+        printf("| %-7s ", etat_str);
+        printf("|\n");
+
+        current = current->suivant;
+    }
+
+    printf("\n");
+}
+
+
+void AfficherPartitionsAvecCouleurs(PartitionNode* partitions) {
+    printf("\nLa liste des partitions en mémoire (avec couleurs) :\n");
+    printf("| Adresse  | Taille  | Etat    |\n");
+    printf("|----------|---------|---------|\n");
+
+    PartitionNode* current = partitions;
+    while (current != NULL) {
+        const char* etat_str = (current->etat == 1) ? "libre" : "occupée";
+
+        // Appliquer la couleur uniquement aux cellules du tableau
+        printf("|");
+#ifdef _WIN32
+        int color = (current->etat == 1) ? 2 : 4;
+        SetColor(0, color);
+#else
+        const char* color = (current->etat == 1) ? "\x1b[42m" : "\x1b[41m";
+        printf("%s", color);
+#endif
+        printf(" %-8d ", current->adresse);
+        printf("|");
+
+        printf(" %-7d ", current->taille);
+        printf("|");
+
+        printf(" %-7s ", etat_str);
+        printf("|");
+
+#ifdef _WIN32
+        ResetColor();
+#else
+        printf("\x1b[0m");
+#endif
+
+        printf("\n");
+
+        current = current->suivant;
+    }
+
+    printf("\n");
+}
+
+
+int allocation(){
+int x;
+
+    printf("Choisissez la politique d'allocation de mémoire :\n");
+    printf("1. First Fit\n");
+    printf("2. Best Fit\n");
+    printf("3. Worst Fit\n");
+
+   scanf("%d", &x);
+   switch (x) {
+        case 1:
+           return 1;
+            break;
+        case 2:
+           return 2;
+            break;
+        case 3:
+           return 3 ;
+            break;
+        default:
+            printf("Choix invalide. Veuillez choisir entre 1, 2 ou 3.\n");
+            break;}
+}
+void allocation2(int x, FileProcessus file, PartitionNode* partitions){
+
+   switch (x) {
+        case 1:
+            firstfit(partitions, &file);
+            LibererMemoire(partitions);
+            break;
+        case 2:
+            bestfit(partitions, &file);
+            LibererMemoire(partitions);
+            break;
+        case 3:
+            worstfit(partitions, &file);
+            LibererMemoire(partitions);
+            break;
+        default:
+            printf("Choix invalide. Veuillez choisir entre 1, 2 ou 3.\n");
+            break;}
+
+}
+
+int main() {
+
+ srand((unsigned int)time(NULL));
+ FileProcessus file;
+    PartitionNode* k ;
+    int choix;
+    int x;
+    InitFile(&file);
+    PartitionNode* partitions = CreerPartitionsAleatoires();  // creation de la mémoire
+    do {
+        printf("\n     ----------------------------------Menu----------------------------\n");
+        printf("       1. Creer l'etat initial de la memoire\n");
+        printf("       2. Afficher l'etat de la memoire (textuel)\n");
+        printf("       3. Afficher l'etat de la memoire (graphique)\n");
+        printf("       4. Creer un ensemble de processus en attente dans la file\n");
+        printf("       5. Afficher l'etat initial de la file des processus\n");
+        printf("       6. Choisir une politique d'allocation\n");
+        printf("       7. Charger un processus en memoire\n");
+        printf("       8. Charger tous les processus en attente\n");
+        printf("       9. Supprimer un processus terminé de la memoire et charger le suivant\n");
+        printf("       10. Rorganiser la memoire\n");
+        printf("       0. Quitter\n");
+        printf("       -------------------------------------------------------------------- \n");
+
+        printf("Entrez votre choix : ");
+        scanf("%d", &choix);
+
+        switch (choix) {
+            case 1:
+                 printf("l'etat initial de la memoire creer avec succee");
+                 k=CreerPartitionsAleatoires();
+                break;
+            case 2:
+                AfficherPartitionsSansCouleurs(k);
+                break;
+            case 3:
+                AfficherPartitionsAvecCouleurs(k);
+                break;
+            case 4:
+                Init(&file);
+                 printf("file creer avec succee ");
+                break;
+            case 5:
+                AfficherFile(file);
+                break;
+            case 6:
+                x=allocation();
+                break;
+            case 7:
+                allocation2(x, file, k);
+                break;
+            case 8:
+
+                break;
+            case 9:
+
+                break;
+            case 10:
+                ReorganiserMemoire(k);
+                break;
+            case 0:
+                printf("Programme terminé.\n");
+                break;
+            default:
+                printf("Choix invalide. Veuillez entrer un nombre entre 0 et 10.\n");
+        }
+
+    } while (choix != 0);
+
+LibererMemoire(partitions);
+
+    return 0;
+}
